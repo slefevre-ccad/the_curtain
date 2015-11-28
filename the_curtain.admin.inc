@@ -7,7 +7,7 @@
  * Page callback
  */
 function _the_curtain_admin_page() {
-  return t('Get your data straight from the horses mouth&mdash; the database.');
+  return t('All shall be revealed.');
 }
 
 function _the_curtain_admin_variable() {
@@ -27,15 +27,15 @@ function _the_curtain_admin_cache_bootstrap() {
 }
 
 function _the_curtain_admin_hooks() {
-#  db_query('SELECT
+  return "Under Construction";
 }
 
 function _the_curtain_watchdog_stats() {
 
   $results = db_query('select type, message, variables, COUNT(*) AS count FROM watchdog w
-    GROUP BY type, message, variables HAVING count > 1 ORDER BY count DESC');
+    GROUP BY type, message, variables HAVING count > 4 ORDER BY count DESC');
 
-  while ( $result = $results->fetchAssoc() ) {
+  foreach ( $results as $result ) {
     // create the column headers from the field names
     if ( ! isset($header) ) {
       $header = array();
@@ -44,12 +44,14 @@ function _the_curtain_watchdog_stats() {
           $header[$field] = $field;
         }
       }
+      unset($header['variables']);
     }
 
-    // turn the row into an array for easy drupal formatting.
-    $rows[] = (array)$result;
-
-    dsm($result);
+    // t() message and variables
+    $result = (array)$result;
+    $result['message'] = t($result['message'], unserialize($result['variables']));
+    unset($result['variables']);
+    $rows[] = $result;
   }
 
   return theme('table', array('header'=>$header,'rows'=>$rows));
@@ -79,30 +81,61 @@ function _the_curtain_admin_theme_table($table, array $orderBy = NULL) {
     // turn the row into an array for easy drupal formatting.
     $result = (array)$result;
 
-    // unserialize serialized values
     foreach ( $result as &$value) {
-      if ( $unserialized = @unserialize($value) ) {
-        if ( is_object($unserialized) ) {
-          $unserialized = (array)$unserialized;
-        }
-        elseif ( is_array($unserialized) ) {
-          $vals = array();
-          foreach ( $unserialized as $key => $val ) {
-            if ( is_object($val) ) {
-              $val = (array)$val;
-            }
-            $vals[] = array($key, $val);
-          }
-          $value = theme('table', array('rows'=>$vals));
-        }
-        else {
-          $value = $unserialized;
-        }
+      if ( strpos($value, ':') === 1 ) {
+        $value = _the_curtain_test_serialization($value);
+      }
+      elseif ( $value == 'N;' ) {
+        // NULL
+        $value = '(literal) NULL';
       }
     }
     $rows[] = (array)$result;
   }
   return theme('table', array('header'=>$header,'rows'=>$rows));
+}
+
+function _the_curtain_test_serialization($value) {
+  // unserialize serialized values
+  if ( $value == 'a:0:{}' ) {
+    // empty array
+    $value = "(serialized empty array)" . theme('table', array('rows'=>array(array("&nbsp;"))));
+  }
+  elseif ( $value == 'b:0;' ) {
+    $value = "(serialized boolean) FALSE";
+  }
+  elseif ( $value == 'b:1;' ) {
+    $value = "(serialized boolean) TRUE";
+  }
+  elseif ( $value == 's:0:"";' ) {
+    // empty string
+    $value = '(serialized empty string) ""';
+  }
+  elseif ( strpos($value, 's:O:') === 0 ) {
+     // object
+    $value = '(serialized object)' . (array)unserialize($value);
+  }
+  elseif ( strpos($value, 'a:') === 0 ) {
+    $vals = array();
+    foreach ( @unserialize($value) as $key => $val ) {
+      if ( is_object($val) ) {
+        $val = (array)$val;
+      }
+      $vals[] = array($key, $val);
+    }
+    $value = '(serialized array)' . theme('table', array('rows'=>$vals));
+  }
+  elseif (
+       strpos($value, 'i:') === 0
+    || strpos($value, 's:') === 0
+    || strpos($value, 'd:') === 0
+  ) {
+    $value = @unserialize($value);
+    if ( is_string($value) && is_numeric($value) ) {
+      $value = '(serialized string numeral) "' . $value . '"';
+    }
+  }
+  return $value;
 }
 
 function _the_curtain_admin_tables_form($form, &$form_state) {
