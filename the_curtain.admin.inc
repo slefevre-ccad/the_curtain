@@ -35,35 +35,32 @@ function _the_curtain_watchdog_stats() {
   $results = db_query('select type, message, variables, COUNT(*) AS count FROM watchdog w
     GROUP BY type, message, variables HAVING count > 4 ORDER BY count DESC');
 
-  foreach ( $results as $result ) {
-    // create the column headers from the field names
-    if ( ! isset($header) ) {
-      $header = array();
-      foreach ( (array)$result as $field => $value ) {
-        if ( ! isset($header[$field]) ) {
-          $header[$field] = $field;
-        }
-      }
-      unset($header['variables']);
-    }
+  $header = array('Type', 'Count', 'Message');
+  $rows = array();
 
+  foreach ( $results as $result ) {
     // t() message and variables
     $result = (array)$result;
     $result['message'] = t($result['message'], unserialize($result['variables']));
     unset($result['variables']);
-    $rows[] = $result;
+    $rows[] = array(
+      $result['type'],
+      $result['count'],
+      $result['message'],
+    );
   }
 
   return theme('table', array('header'=>$header,'rows'=>$rows));
 }
 
-function _the_curtain_admin_theme_table($table, array $orderBy = NULL) {
+function _the_curtain_admin_theme_table($table, array $orderBy = NULL, $limit = 100) {
 
   $query = db_select($table, 't')->fields('t')
     ->addTag(__FUNCTION__);
   foreach ( $orderBy as $field ) {
     $query->orderBy($field);
   }
+  $query->range(0,$limit);
   $results = $query->execute()->fetchAll();
 
   foreach ( $results as $result ) {
@@ -73,7 +70,7 @@ function _the_curtain_admin_theme_table($table, array $orderBy = NULL) {
       $header = array();
       foreach ( (array)$result as $field => $value ) {
         if ( ! isset($header[$field]) ) {
-          $header[$field] = $field;
+          $header[$field] = ucwords($field);
         }
       }
     }
@@ -97,8 +94,8 @@ function _the_curtain_admin_theme_table($table, array $orderBy = NULL) {
 
 function _the_curtain_test_serialization($value) {
   // unserialize serialized values
+
   if ( $value == 'a:0:{}' ) {
-    // empty array
     $value = "(serialized empty array)" . theme('table', array('rows'=>array(array("&nbsp;"))));
   }
   elseif ( $value == 'b:0;' ) {
@@ -108,13 +105,15 @@ function _the_curtain_test_serialization($value) {
     $value = "(serialized boolean) TRUE";
   }
   elseif ( $value == 's:0:"";' ) {
-    // empty string
     $value = '(serialized empty string) ""';
   }
   elseif ( strpos($value, 's:O:') === 0 ) {
      // object
     $value = '(serialized object)' . (array)unserialize($value);
   }
+
+  /*
+  // this is acting problematic
   elseif ( strpos($value, 'a:') === 0 ) {
     $vals = array();
     foreach ( @unserialize($value) as $key => $val ) {
@@ -125,6 +124,9 @@ function _the_curtain_test_serialization($value) {
     }
     $value = '(serialized array)' . theme('table', array('rows'=>$vals));
   }
+
+  */
+
   elseif (
        strpos($value, 'i:') === 0
     || strpos($value, 's:') === 0
@@ -135,6 +137,7 @@ function _the_curtain_test_serialization($value) {
       $value = '(serialized string numeral) "' . $value . '"';
     }
   }
+
   return $value;
 }
 
